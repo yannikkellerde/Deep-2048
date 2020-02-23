@@ -1,0 +1,9 @@
+TOP=0
+RIGHT=1
+BOTTOM=2
+LEFT=3
+TOP_INDICES=[range(4),range(4,8),range(8,12),range(12,16)]
+RIGHT_INDICES=[range(3,16,4),range(2,15,4),range(1,14,4),range(0,13,4)]
+BOTTOM_INDICES=[range(12,16),range(8,12),range(4,8),range(4)]
+LEFT_INDICES=[range(0,13,4),range(1,14,4),range(2,15,4),range(3,16,4)]
+INDICES = [TOP_INDICES,RIGHT_INDICES,BOTTOM_INDICES,LEFT_INDICES]

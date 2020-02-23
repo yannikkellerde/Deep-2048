@@ -1,0 +1,4 @@
+.vscode/
+logdir/
+venv/
+__pycache__/
