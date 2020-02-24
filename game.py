@@ -45,36 +45,41 @@ class Game_2048(gym.Env):
         for n in range(3,0,-1):
             for row_num in range(n):
                 reward+=self._merge_rows(state,rows[row_num+1],rows[row_num],merge_avaliable)
-        return state,reward,np.array_equal(old_state,state)
+        done = np.array_equal(old_state,state)
+        return state,reward-done,done
     def step(self,action):
         state,reward,done=self.check_update(self.state,action)
+        if not done:
+            self.spawn_number()
         return state,reward,done,{}
     def get_state_expectations(self,state):
-        states_with_expectations = []
+        expectations = []
+        states = []
         free_squares = list(filter(lambda x:state[x]==0,range(len(state))))
         for square in free_squares:
             store_state = state.copy()
             store_state[square] = 1
-            states_with_expectations.append([0.9/len(free_squares),store_state])
+            states.append(store_state)
+            expectations.append(0.9/len(free_squares))
             store_state = state.copy()
             store_state[square] = 2
-            states_with_expectations.append([0.1/len(free_squares),store_state])
-        return states_with_expectations
+            states.append(store_state)
+            expectations.append(0.1/len(free_squares))
+        return np.array(states),np.array(expectations)
     def __str__(self):
         outstr = ""
+        maxlen = max([len(str(1<<x)) for x in self.state])
         for i in range(len(self.state)):
             if i%4==0:
                 outstr += "\n"
-            outstr += f"{1<<(self.state[i]) if self.state[i]>0 else 0} "
+            myself = str(1<<(self.state[i])) if self.state[i]>0 else "0"
+            outstr += myself+" "*(maxlen-len(myself)+1)
         return outstr
 
 if __name__=="__main__":
     game = Game_2048()
-    print(game.convert_to_nn_input(game.state).astype(np.int))
-    print(game)
-    while 1:
+    print(game.get_state_expectations(game.state))
+    """while 1:
         direction = int(input("Enter your move"))
-        game.step(direction)
-        game.spawn_number()
-        print(game.convert_to_nn_input(game.state).astype(np.int))
-        print(game)
+        state,reward,done,_info = game.step(direction)
+        print(game,reward,done)"""

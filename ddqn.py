@@ -2,6 +2,7 @@ import tensorflow as tf
 import os,sys
 import numpy as np
 import random
+import time
 from shutil import rmtree
 from collections import deque
 from keras.layers import Dense
@@ -13,9 +14,9 @@ class DeepTD0():
         #Hyperparams
         self.discount_factor = 0.99
         self.learning_rate = 0.001
-        self.epsilon = 1.0
-        self.epsilon_decay = 0.999
-        self.epsilon_min = 0.01
+        self.epsilon = 0
+        self.epsilon_decay = 0
+        self.epsilon_min = 0.05
         self.batch_size = 64
         self.soft_update_rate = 0.01
         self.train_start = 1000
@@ -29,9 +30,9 @@ class DeepTD0():
         self.target_model = clone_model(self.model)
     def build_model(self):
         model = Sequential()
-        model.add(Dense(24, input_dim=self.state_size, activation='relu',
+        model.add(Dense(124, input_dim=self.state_size, activation='relu',
                         kernel_initializer='he_uniform'))
-        model.add(Dense(24, activation='relu',
+        model.add(Dense(124, activation='relu',
                         kernel_initializer='he_uniform'))
         model.add(Dense(1, activation='linear',
                         kernel_initializer='he_uniform'))
@@ -41,35 +42,50 @@ class DeepTD0():
     def hard_target_update(self):
         self.target_model.set_weights(self.model.get_weights())
     def soft_target_update(self):
-        self.target_model.set_weights(np.array(self.model.get_weights())*self.soft_update_rate +
-                                      np.array(self.target_model.get_weights())*(1-self.soft_update_rate))
+        W = self.model.get_weights()
+        tgt_W = self.target_model.get_weights()
+        for i in range(len(W)):
+            tgt_W[i] = self.soft_update_rate * W[i] + (1 - self.soft_update_rate) * tgt_W[i]
+        self.target_model.set_weights(tgt_W)
     def epsilon_greedy(self, state):
         if np.random.rand() <= self.epsilon:
-            return random.randrange(self.action_size)
+            avaliable =  []
+            for a in range(self.action_size):
+                _,_,done = self.game.check_update(state.copy(),a)
+                if not done:
+                    avaliable.append(a)
+            if len(avaliable)>0:
+                return random.choice(avaliable)
+            else:
+                return random.randrange(self.action_size)
         else:
             best_val = -np.inf
             best_a = None
             for a in range(self.action_size):
                 new_state,reward,done = self.game.check_update(state.copy(),a)
-                val = self._get_state_expected_value(new_state,self.model)
-                val = reward+self.discount_factor*val
+                if done:
+                    val = reward
+                else:
+                    val = self._get_state_expected_value(new_state,self.model)
+                    val = reward+self.discount_factor*val
                 if  val > best_val:
                     best_val = val
                     best_a = a
             return best_a
     def _get_state_expected_value(self,state,model):
         value = 0
-        expectations = self.game.get_state_expectations(state)
-        for e in expectations:
-            nn_input = self.game.convert_to_nn_input(e[1]).reshape(1,-1)
-            value+=e[0]*model.predict(nn_input).item()
-        return value
+        states,probs = self.game.get_state_expectations(state)
+        nn_input = np.array([self.game.convert_to_nn_input(s) for s in states])
+        predictions = model.predict(nn_input).reshape(len(nn_input))
+        weighted = predictions*probs
+        return weighted.sum()
     def _get_target_value(self,state):
         best_value = -np.inf
         for a in range(self.action_size):
             state,reward,invalid = self.game.check_update(state.copy(),a)
-            value = 0
-            if not invalid:
+            if invalid:
+                value = reward
+            else:
                 value = self._get_state_expected_value(state,self.target_model)*self.discount_factor+reward
             if value>best_value:
                 best_value = value
@@ -90,7 +106,10 @@ class DeepTD0():
         return loss
 
     def train_iterations(self,iterations):
-        rmtree(os.path.abspath(os.path.dirname(__file__)) + "/logdir")
+        try:
+            rmtree(os.path.abspath(os.path.dirname(__file__)) + "/logdir")
+        except:
+            pass
         train_writer = tf.summary.create_file_writer(os.path.abspath(os.path.dirname(__file__)) + "/logdir")
         state = self.game.reset()
         rew_sum = 0
@@ -98,7 +117,7 @@ class DeepTD0():
         cnt = 0
         for i in range(iterations):
             action = self.epsilon_greedy(state)
-            self.decay_epsilon()
+            print(self.game)
             new_state,reward,done,_info = self.game.step(action)
             rew_sum += reward
             self.append_sample(new_state)
@@ -108,15 +127,21 @@ class DeepTD0():
             cnt+=1
             if done:
                 state=self.game.reset()
+                nn_input = self.game.convert_to_nn_input(state).reshape(1,-1)
+                predict_mod = self._get_state_expected_value(state,self.model)
+                predict_targ = self._get_state_expected_value(state,self.target_model)
                 self.append_sample(state)
                 if len(self.memory) > self.train_start:
+                    self.decay_epsilon()
                     print(f"Iteration: {i}, Reward sum: {rew_sum}, cnt: {cnt}, avg loss: {loss_sum/cnt:.3f}, eps: {self.epsilon:.3f}")
                     with train_writer.as_default():
                         tf.summary.scalar('reward', rew_sum, step=i)
                         tf.summary.scalar('avg loss', loss_sum/cnt, step=i)
-                    rew_sum = 0
-                    loss_sum = 0
-                    cnt = 0
+                        tf.summary.scalar('predict_mod', predict_mod, step=i)
+                        tf.summary.scalar('predict_targ', predict_targ, step=i)
+                rew_sum = 0
+                loss_sum = 0
+                cnt = 0
 if __name__ == '__main__':
     learner = DeepTD0(Game_2048())
-    learner.train_iterations(10000)
+    #learner.train_iterations(100000)
