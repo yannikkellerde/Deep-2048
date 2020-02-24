@@ -38,20 +38,33 @@ class Game_2048(gym.Env):
         choice = np.random.choice(free_squares)
         self.state[choice]=1 if random.random()<0.9 else 2
     def check_update(self,state,action):
-        old_state=state.copy()
+        new_state=state.copy()
         rows = INDICES[action]
         merge_avaliable = [True]*4
         reward = 0
         for n in range(3,0,-1):
             for row_num in range(n):
-                reward+=self._merge_rows(state,rows[row_num+1],rows[row_num],merge_avaliable)
-        done = np.array_equal(old_state,state)
-        return state,reward-done,done
+                reward+=self._merge_rows(new_state,rows[row_num+1],rows[row_num],merge_avaliable)
+        done = np.array_equal(new_state,state)
+        return new_state,reward-done,done
     def step(self,action):
         state,reward,done=self.check_update(self.state,action)
+        self.state = state
         if not done:
             self.spawn_number()
-        return state,reward,done,{}
+        return state,reward,done
+    def random_step(self):
+        aval_actions = list(range(self.action_space.n))
+        while len(aval_actions)>0:
+            action=random.choice(aval_actions)
+            state,reward,done=self.check_update(self.state,action)
+            if done:
+                aval_actions.remove(action)
+            else:
+                self.state = state
+                self.spawn_number()
+                return state, reward, done
+        return state, reward, done
     def get_state_expectations(self,state):
         expectations = []
         states = []
@@ -81,5 +94,5 @@ if __name__=="__main__":
     print(game.get_state_expectations(game.state))
     """while 1:
         direction = int(input("Enter your move"))
-        state,reward,done,_info = game.step(direction)
+        state,reward,done = game.step(direction)
         print(game,reward,done)"""

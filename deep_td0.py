@@ -81,15 +81,20 @@ class DeepTD0():
         return weighted.sum()
     def _get_target_value(self,state):
         best_value = -np.inf
+        res_state = None
+        res_reward = 0
         for a in range(self.action_size):
-            state,reward,invalid = self.game.check_update(state.copy(),a)
+            new_state,reward,invalid = self.game.check_update(state.copy(),a)
             if invalid:
                 value = reward
             else:
-                value = self._get_state_expected_value(state,self.target_model)*self.discount_factor+reward
+                value = self._get_state_expected_value(new_state,self.model)*self.discount_factor+reward
             if value>best_value:
                 best_value = value
-        return best_value
+                res_state=new_state
+                res_reward=reward
+        target_val = self._get_state_expected_value(res_state,self.target_model)*self.discount_factor+res_reward
+        return target_val
     def append_sample(self,state):
         self.memory.append(state)
     def decay_epsilon(self):
@@ -118,7 +123,7 @@ class DeepTD0():
         for i in range(iterations):
             action = self.epsilon_greedy(state)
             print(self.game)
-            new_state,reward,done,_info = self.game.step(action)
+            new_state,reward,done = self.game.step(action)
             rew_sum += reward
             self.append_sample(new_state)
             loss = self.train_one_batch()
