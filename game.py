@@ -27,6 +27,27 @@ class Game_2048(gym.Env):
                 state[from_row_indicies[i]]=0
                 merge_avaliable[i]=False
         return reward
+    def _merge_one_column(self,state,row_nums):
+        result_tiles = []
+        reward = 0
+        temp = None
+        for i in row_nums:
+            tile=state[i]
+            if tile==0:
+                continue
+            elif tile==temp:
+                result_tiles.append(tile+1)
+                reward+=2<<tile
+                temp=None
+            else:
+                if temp is not None:
+                    result_tiles.append(temp)
+                temp=tile
+        if temp is not None:
+            result_tiles.append(temp)
+        for i in range(len(row_nums)):
+            state[row_nums[i]] = 0 if i>=len(result_tiles) else result_tiles[i]
+        return reward
     def convert_to_nn_input(self,state):
         out_state = np.zeros(self.observation_space.n,dtype=np.int)
         for i in range(self.max_power):
@@ -42,9 +63,8 @@ class Game_2048(gym.Env):
         rows = INDICES[action]
         merge_avaliable = [True]*4
         reward = 0
-        for n in range(3,0,-1):
-            for row_num in range(n):
-                reward+=self._merge_rows(new_state,rows[row_num+1],rows[row_num],merge_avaliable)
+        for row in rows:
+            reward+=self._merge_one_column(new_state,row)
         done = np.array_equal(new_state,state)
         return new_state,reward-done,done
     def step(self,action):
@@ -91,8 +111,8 @@ class Game_2048(gym.Env):
 
 if __name__=="__main__":
     game = Game_2048()
-    print(game.get_state_expectations(game.state))
-    """while 1:
+    print(game)
+    while 1:
         direction = int(input("Enter your move"))
         state,reward,done = game.step(direction)
-        print(game,reward,done)"""
+        print(game,reward,done)
