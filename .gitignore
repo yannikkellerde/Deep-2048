@@ -2,3 +2,4 @@
 logdir/
 venv/
 __pycache__/
+geckodriver.log

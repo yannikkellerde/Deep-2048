@@ -51,7 +51,7 @@ class DeepTD0():
         if np.random.rand() <= self.epsilon:
             avaliable =  []
             for a in range(self.action_size):
-                _,_,done = self.game.check_update(state.copy(),a)
+                _,_,done = self.game.check_update(state,a)
                 if not done:
                     avaliable.append(a)
             if len(avaliable)>0:
@@ -62,7 +62,7 @@ class DeepTD0():
             best_val = -np.inf
             best_a = None
             for a in range(self.action_size):
-                new_state,reward,done = self.game.check_update(state.copy(),a)
+                new_state,reward,done = self.game.check_update(state,a)
                 if done:
                     val = reward
                 else:
@@ -84,7 +84,7 @@ class DeepTD0():
         res_state = None
         res_reward = 0
         for a in range(self.action_size):
-            new_state,reward,invalid = self.game.check_update(state.copy(),a)
+            new_state,reward,invalid = self.game.check_update(state,a)
             if invalid:
                 value = reward
             else:
@@ -149,4 +149,4 @@ class DeepTD0():
                 cnt = 0
 if __name__ == '__main__':
     learner = DeepTD0(Game_2048())
-    #learner.train_iterations(100000)
+    learner.train_iterations(100000)

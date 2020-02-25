@@ -22,6 +22,8 @@ class MCTS():
         self.game = game
         self.exploration_constant = 700
         self.root = probabilistic_Node(self.game.state,1)
+    def set_state(self, state):
+        self.root = probabilistic_Node(state,1)
     def tree_policy_UCT(self,node:Node,parent:Node):
         if node.visits==0:
             return np.inf
@@ -103,7 +105,7 @@ class MCTS():
                     action_vals.append({"action":a,"visits":child.visits,"reward":child.avg_reward})
                     break
         return action_vals
-    def mcts(self,max_time):
+    def get_action(self,max_time=1):
         start = time.time()
         while time.time()- start<max_time:
             path = self.select_most_promising()
@@ -130,8 +132,8 @@ if __name__ == "__main__":
     mcts = MCTS(game)
     print(game)
     while 1:
-        mcts.root = probabilistic_Node(game.state,1)
-        action = mcts.mcts(1)
+        mcts.set_state(game.state)
+        action = mcts.get_action(1)
         if action is None:
             break
         game.step(action)
