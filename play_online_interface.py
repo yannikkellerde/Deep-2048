@@ -41,6 +41,6 @@ class Web_interface():
             time.sleep(0.2)
 if __name__=="__main__":
     game = Game_2048()
-    agent = MCTS(game)
+    agent = Expectimax_human_heuristic(game)
     web = Web_interface(agent)
     web.run()
