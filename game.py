@@ -4,7 +4,7 @@ import gym
 from constants import *
 class Game_2048(gym.Env):
     def __init__(self):
-        self.max_power = 16
+        self.max_power = 12
         self.action_space = gym.spaces.Discrete(4)
         self.state_space = self.observation_space = gym.spaces.Discrete((16*self.max_power))
         self.reset()
