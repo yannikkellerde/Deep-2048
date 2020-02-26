@@ -39,6 +39,7 @@ class MC_state_value():
         self.game.reset()
         done = False
         states = [self.game.state]
+        rewardlist = []
         cum_reward = 0
         while not done:
             action = self.get_action(self.game.state)
@@ -48,10 +49,11 @@ class MC_state_value():
             if not done:
                 self.game.spawn_number()
             cum_reward+=reward
+            rewardlist.append(reward)
         store_rew = cum_reward
-        for state in reversed(states):
-            self.memory.append((store_rew,state))
-            store_rew*=self.discount_factor
+        for i in range(len(states)):
+            self.memory.append((store_rew,states[i]))
+            store_rew-=rewardlist[i]
         return cum_reward
     def train_one_batch(self):
         if len(self.memory) < self.train_start:
