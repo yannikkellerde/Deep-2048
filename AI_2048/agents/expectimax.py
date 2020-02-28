@@ -1,10 +1,11 @@
 import time
 import math
 import numpy as np
-from constants import *
-from game import Game_2048
-from human_heuristic import human_heuristic
-class Expectimax_human_heuristic():
+from AI_2048.util.constants import *
+from AI_2048.env.game import Game_2048
+from AI_2048.heuristics.human_heuristic import human_heuristic
+from AI_2048.agents.base import Agent
+class Expectimax_human_heuristic(Agent):
 	def __init__(self,game:Game_2048,heuristic=human_heuristic):
 		self.game = game
 		self.heuristic = heuristic

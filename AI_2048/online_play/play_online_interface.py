@@ -1,14 +1,12 @@
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
-from game import Game_2048
-from expectimax import Expectimax_human_heuristic
-from mcts import MCTS
+from AI_2048.agents.base import Agent
 import math
 import numpy as np
 import time
-from constants import *
+from AI_2048.util.constants import *
 class Web_interface():
-    def __init__(self,agent):
+    def __init__(self,agent:Agent):
         self.driver = webdriver.Firefox()
         self.driver.get('https://gabrielecirulli.github.io/2048/')
         self.body = self.driver.find_element_by_tag_name("body")
@@ -39,8 +37,3 @@ class Web_interface():
             self.get_board()
             self.step()
             time.sleep(0.2)
-if __name__=="__main__":
-    game = Game_2048()
-    agent = Expectimax_human_heuristic(game)
-    web = Web_interface(agent)
-    web.run()

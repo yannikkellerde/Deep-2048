@@ -8,8 +8,9 @@ from collections import deque
 from keras.layers import Dense
 from keras.optimizers import Adam
 from keras.models import Sequential,clone_model
-from game import Game_2048
-class DeepTD0():
+from AI_2048.env.game import Game_2048
+from AI_2048.agents.base import Agent
+class DeepTD0(Agent):
     def __init__(self,game:Game_2048):
         #Hyperparams
         self.discount_factor = 0.99

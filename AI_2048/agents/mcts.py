@@ -1,8 +1,9 @@
-from game import Game_2048
+from AI_2048.env.game import Game_2048
 import numpy as np
 import math
 import time
 import random
+from AI_2048.agents.base import Agent
 class Node():
     def __init__(self, state):
         self.children = []
@@ -17,7 +18,7 @@ class probabilistic_Node(Node):
     def __init__(self, state, probability):
         super(probabilistic_Node, self).__init__(state)
         self.probability = probability
-class MCTS():
+class MCTS(Agent):
     def __init__(self,game:Game_2048):
         self.game = game
         self.exploration_constant = 700

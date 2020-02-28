@@ -1,15 +1,16 @@
-from game import Game_2048
+from AI_2048.env.game import Game_2048
 import random
 import math
 import numpy as np
-class Random_agent():
+from AI_2048.agents.base import Agent
+class Random_agent(Agent):
     def __init__(self,game:Game_2048):
         self.game = game
     def get_action(self):
         return self.game.action_space.sample()
     def __str__(self):
         return "Random agent"
-class Random_avoid_done():
+class Random_avoid_done(Agent):
     def __init__(self,game:Game_2048):
         self.game = game
     def get_action(self):
@@ -24,7 +25,7 @@ class Random_avoid_done():
             return self.game.action_space.sample()
     def __str__(self):
         return "Random avoid done agent"
-class Greedy_biased_agent():
+class Greedy_biased_agent(Agent):
     def __init__(self,game:Game_2048):
         self.game = game
     def get_action(self):
@@ -38,7 +39,7 @@ class Greedy_biased_agent():
         return best_a
     def __str__(self):
         return "Greedy biased agent"
-class Greedy_agent():
+class Greedy_agent(Agent):
     def __init__(self,game:Game_2048):
         self.game = game
     def get_action(self):

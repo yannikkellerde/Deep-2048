@@ -1,7 +1,7 @@
 import numpy as np
 import random
 import gym
-from constants import *
+from AI_2048.util.constants import *
 class Game_2048(gym.Env):
     def __init__(self):
         self.max_power = 12
