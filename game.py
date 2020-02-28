@@ -5,6 +5,7 @@ from constants import *
 class Game_2048(gym.Env):
     def __init__(self):
         self.max_power = 12
+        self.done_reward = -1
         self.action_space = gym.spaces.Discrete(4)
         self.state_space = self.observation_space = gym.spaces.Discrete((16*self.max_power))
         self.reset()
@@ -37,7 +38,7 @@ class Game_2048(gym.Env):
                 continue
             elif tile==temp:
                 result_tiles.append(tile+1)
-                reward+=2<<tile
+                reward+=2<<(tile)
                 temp=None
             else:
                 if temp is not None:
@@ -66,7 +67,7 @@ class Game_2048(gym.Env):
         for row in rows:
             reward+=self._merge_one_column(new_state,row)
         done = np.array_equal(new_state,state)
-        return new_state,reward-done,done
+        return new_state,self.done_reward if done else reward,done
     def step(self,action):
         state,reward,done=self.check_update(self.state,action)
         self.state = state
