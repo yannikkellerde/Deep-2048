@@ -7,7 +7,8 @@ class Game_2048(gym.Env):
         self.max_power = 12
         self.done_reward = -1
         self.action_space = gym.spaces.Discrete(4)
-        self.state_space = self.observation_space = gym.spaces.Discrete((16*self.max_power))
+        self.space_1d = gym.spaces.MultiBinary(16*self.max_power)
+        self.space_2d = gym.spaces.MultiDiscrete([self.max_power for _ in range(16)])
         self.reset()
     def reset(self):
         self.state=np.zeros(16,dtype=np.int)
@@ -50,10 +51,16 @@ class Game_2048(gym.Env):
             state[row_nums[i]] = 0 if i>=len(result_tiles) else result_tiles[i]
         return reward
     def convert_to_nn_input(self,state):
-        out_state = np.zeros(self.observation_space.n,dtype=np.int)
+        out_state = np.zeros(self.space_1d.n,dtype=np.int)
         for i in range(self.max_power):
             for j in range(16):
                 out_state[i*16+j]=state[j]==i
+        return out_state
+    def convert_to_nn_input_2D(self,state):
+        out_state = np.zeros((self.max_power,16),dtype=np.int)
+        for i in range(self.max_power):
+            for j in range(16):
+                out_state[i,j]=state[j]==i
         return out_state
     def spawn_number(self):
         free_squares = self._get_free_squares()
@@ -100,6 +107,23 @@ class Game_2048(gym.Env):
             states.append(store_state)
             expectations.append(0.1/len(free_squares))
         return np.array(states),np.array(expectations)
+    def standard_rotate(self,state):
+        state_rots = []
+        for rot in ROTATIONMAPS:
+            state_rot = []
+            for i in rot:
+                state_rot.append(state[i])
+            state_rots.append(state_rot)
+        for i in range(len(state)):
+            max_num = 0
+            for srot in state_rots:
+                if srot[i]>max_num:
+                    max_num=srot[i]
+            state_rots = list(filter(lambda x:x[i]==max_num, state_rots))
+            if len(state_rots)==1:
+                break
+        return state_rots[0]
+
     def __str__(self):
         outstr = ""
         maxlen = max([len(str(1<<x)) for x in self.state])

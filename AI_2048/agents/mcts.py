@@ -4,6 +4,7 @@ import math
 import time
 import random
 from AI_2048.agents.base import Agent
+from AI_2048.util.get_policy_func import get_policy_func
 class Node():
     def __init__(self, state):
         self.children = []
@@ -18,16 +19,18 @@ class probabilistic_Node(Node):
     def __init__(self, state, probability):
         super(probabilistic_Node, self).__init__(state)
         self.probability = probability
+        self.done = False
 class MCTS(Agent):
-    def __init__(self,game:Game_2048):
+    def __init__(self,game=Game_2048(),playout_policy=get_policy_func("Random_agent")):
         self.game = game
-        self.exploration_constant = 700
+        self.exploration_constant = 100
+        self.playout_policy = playout_policy
         self.root = probabilistic_Node(self.game.state,1)
     def set_state(self, state):
         self.root = probabilistic_Node(state,1)
     def tree_policy_UCT(self,node:Node,parent:Node):
         if node.visits==0:
-            return np.inf
+            return 1<<20+node.transition_reward
         return node.avg_reward+self.exploration_constant*math.sqrt((2*math.log(parent.visits))/node.visits)
     def prob_node_tree_policy(self,node:probabilistic_Node,parent:Node):
         return node.probability-node.visits/parent.visits
@@ -50,7 +53,8 @@ class MCTS(Agent):
         if not isinstance(node,probabilistic_Node):
             self.game.spawn_number()
         while not done:
-            _, reward, done = self.game.random_step()
+            action = self.playout_policy(self.game.state)
+            _, reward, done = self.game.step(action)
             cum_reward += reward
         return cum_reward
     def backtrack(self,node_path,reward):
@@ -77,26 +81,24 @@ class MCTS(Agent):
                 path.append(node)
     def expand(self,node):
         if isinstance(node,probabilistic_Node):
+            if node.done:
+                return None
             for a in range(self.game.action_space.n):
                 next_state,reward,done = self.game.check_update(node.state,a)
                 if not done:
                     child = player_Node(next_state, reward)
                     node.children.append(child)
             if len(node.children)>0:
-                playout_node = random.choice(node.children)
+                return random.choice(node.children)
             else:
-                playout_node = None
+                node.done = True
+                return None
         else:
             states,probs = self.game.get_state_expectations(node.state)
             for i in range(len(states)):
                 child = probabilistic_Node(states[i],probs[i])
                 node.children.append(child)
-            playout_node = self.choose_child(node)
-        return playout_node
-    def remove_empty_nodes(self, path):
-        for i in range(len(path)-1,1,-1):
-            if len(path[i].children)==0:
-                path[i-1].children.remove(path[i])
+            return self.choose_child(node)
     def get_action_vals(self):
         action_vals = []
         for a in range(self.game.action_space.n):
@@ -106,7 +108,7 @@ class MCTS(Agent):
                     action_vals.append({"action":a,"visits":child.visits,"reward":child.avg_reward})
                     break
         return action_vals
-    def get_action(self,max_time=1):
+    def get_action(self,state,max_time=1):
         start = time.time()
         while time.time()- start<max_time:
             path = self.select_most_promising()
@@ -118,10 +120,10 @@ class MCTS(Agent):
                 if playout_node is not None:
                     path.append(playout_node)
             if playout_node is None:
-                self.remove_empty_nodes(path)
+                reward = self.game.done_reward
             else:
                 reward=self.playout(playout_node)
-                self.backtrack(path,reward)
+            self.backtrack(path,reward)
         action_vals = self.get_action_vals()
         self.game.state = self.root.state
         if len(action_vals)==0:
@@ -130,12 +132,20 @@ class MCTS(Agent):
 
 if __name__ == "__main__":
     game = Game_2048()
-    mcts = MCTS(game)
-    print(game)
-    while 1:
-        mcts.set_state(game.state)
-        action = mcts.get_action(1)
-        if action is None:
-            break
-        game.step(action)
+    for ec in [10,40,70,100,175,250,500]:
+        mcts = MCTS(game,playout_policy=get_policy_func("Random_agent"))
+        mcts.exploration_constant = ec
         print(game)
+        cum_reward = 0
+        while 1:
+            mcts.set_state(game.state)
+            action = mcts.get_action(game.state,1)
+            if action is None:
+                break
+            _,reward,done = game.step(action)
+            cum_reward+=reward
+            print(game)
+        log = f"{ec}:{cum_reward}\n"
+        print(log)
+        with open("hyperparameter_tuning.log","a") as f:
+            f.write(log)

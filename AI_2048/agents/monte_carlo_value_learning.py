@@ -1,9 +1,7 @@
 import numpy as np
 import os,sys
 from shutil import rmtree
-from tensorflow.keras.layers import Dense
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.models import Sequential
+from AI_2048.neural_nets.mlp import mlp
 import tensorflow as tf
 from AI_2048.env.game import Game_2048
 from AI_2048.util.constants import *
@@ -13,7 +11,7 @@ from collections import deque
 import math
 
 class MC_state_value():
-    def __init__(self,game:Game_2048):
+    def __init__(self,game=Game_2048()):
         self.game = game
         self.memory = deque(maxlen=100000)
         self.learning_rate = 0.01
@@ -21,30 +19,11 @@ class MC_state_value():
         self.rollout_batch_size = 400
         self.train_per_it = 100
         self.train_start = 10000
-        self.model = Sequential()
-        self.model.add(Dense(256, input_dim=self.game.observation_space.n,
-                        activation='relu',kernel_initializer='he_uniform'))
-        self.model.add(Dense(256, activation='relu',
-                        kernel_initializer='he_uniform'))
-        self.model.add(Dense(256, activation='relu',
-                        kernel_initializer='he_uniform'))
-        self.model.add(Dense(256, activation='relu',
-                        kernel_initializer='he_uniform'))
-        self.model.add(Dense(256, activation='relu',
-                        kernel_initializer='he_uniform'))
-        self.model.add(Dense(256, activation='relu',
-                        kernel_initializer='he_uniform'))
-        self.model.add(Dense(256, activation='relu',
-                        kernel_initializer='he_uniform'))
-        self.model.add(Dense(256, activation='relu',
-                        kernel_initializer='he_uniform'))
-        self.model.add(Dense(1, activation='linear',
-                        kernel_initializer='he_uniform'))
-        self.model.compile(loss='mse', optimizer=Adam(lr=self.learning_rate))
+        self.model = mlp(self.game.space_1d.n,5,256,1,lr=self.learning_rate)
     def get_action(self,state):
         action_vals = []
         for a in range(self.game.action_space.n):
-            new_state,reward,done = self.game.check_update(state,a)
+            new_state,reward,done = self.game.check_update(self.state,a)
             if done:
                 action_vals.append(reward)
             else:

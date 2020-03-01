@@ -4,16 +4,16 @@ import math
 import numpy as np
 from AI_2048.agents.base import Agent
 class Random_agent(Agent):
-    def __init__(self,game:Game_2048):
+    def __init__(self,game=Game_2048()):
         self.game = game
-    def get_action(self):
+    def get_action(self,state):
         return self.game.action_space.sample()
     def __str__(self):
         return "Random agent"
 class Random_avoid_done(Agent):
-    def __init__(self,game:Game_2048):
+    def __init__(self,game=Game_2048()):
         self.game = game
-    def get_action(self):
+    def get_action(self,state):
         aval_actions = []
         for a in range(self.game.action_space.n):
             _,_,done = self.game.check_update(self.game.state,a)
@@ -26,9 +26,9 @@ class Random_avoid_done(Agent):
     def __str__(self):
         return "Random avoid done agent"
 class Greedy_biased_agent(Agent):
-    def __init__(self,game:Game_2048):
+    def __init__(self,game=Game_2048()):
         self.game = game
-    def get_action(self):
+    def get_action(self,state):
         best_a = None
         best_val = -np.inf
         for a in range(self.game.action_space.n):
@@ -40,9 +40,9 @@ class Greedy_biased_agent(Agent):
     def __str__(self):
         return "Greedy biased agent"
 class Greedy_agent(Agent):
-    def __init__(self,game:Game_2048):
+    def __init__(self,game=Game_2048()):
         self.game = game
-    def get_action(self):
+    def get_action(self,state):
         best_a = []
         best_val = -np.inf
         for a in range(self.game.action_space.n):
@@ -64,10 +64,10 @@ def rollout_agent(agent,rollouts):
         done = False
         rew = 0
         step_count = 0
-        agent.game.reset()
+        state = agent.game.reset()
         while not done:
-            a = agent.get_action()
-            _,reward,done = agent.game.step(a)
+            a = agent.get_action(state)
+            state,reward,done = agent.game.step(a)
             rew+=reward
             step_count+=1
         rewlist.append(rew)
@@ -76,8 +76,9 @@ def rollout_agent(agent,rollouts):
 def calc_rollout_variances(agent,rollouts,step_size):
     done = False
     states = []
+    state = agent.game.reset()
     while not done:
-        a = agent.get_action()
+        a = agent.get_action(state)
         state,_,done = agent.game.step(a)
         states.append(state)
     for i in range(0,len(states),step_size):
@@ -87,8 +88,8 @@ def calc_rollout_variances(agent,rollouts,step_size):
             cum_rew = 0
             done=False
             while not done:
-                a = agent.get_action()
-                _,reward,done = agent.game.step(a)
+                a = agent.get_action(state)
+                state,reward,done = agent.game.step(a)
                 cum_rew+=reward
             cum_rews.append(cum_rew)
         mean = sum(cum_rews)/len(cum_rews)

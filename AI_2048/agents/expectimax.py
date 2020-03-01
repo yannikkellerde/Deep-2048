@@ -6,12 +6,12 @@ from AI_2048.env.game import Game_2048
 from AI_2048.heuristics.human_heuristic import human_heuristic
 from AI_2048.agents.base import Agent
 class Expectimax_human_heuristic(Agent):
-	def __init__(self,game:Game_2048,heuristic=human_heuristic):
+	def __init__(self,game=Game_2048(),heuristic=human_heuristic):
 		self.game = game
 		self.heuristic = heuristic
 	def set_state(self, state):
 		self.game.state = state
-	def get_action(self,maxdepth=1):
+	def get_action(self,state,maxdepth=1):
 		self.maxdepth = maxdepth
 		return self.eval_state(self.game.state,0)[1]
 	def eval_state(self,state,depth):

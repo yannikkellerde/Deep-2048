@@ -1,7 +1,7 @@
 import numpy as np
 import os,sys
 from shutil import rmtree
-from tensorflow.keras.layers import Dense,BatchNormalization
+from tensorflow.keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import Sequential
 import tensorflow as tf
@@ -11,9 +11,10 @@ import random
 import time
 from collections import deque
 from AI_2048.agents.base import Agent
+from AI_2048.neural_nets.mlp import mlp
 
 class DeepTD0(Agent):
-    def __init__(self,game:Game_2048):
+    def __init__(self,game=Game_2048()):
         self.game = game
         self.memory = deque(maxlen=100000)
         self.learning_rate = 0.003
@@ -22,26 +23,7 @@ class DeepTD0(Agent):
         self.rollout_batch_size = 100
         self.train_per_it = 100
         self.train_start = 10000
-        self.model = Sequential()
-        self.model.add(Dense(256, input_dim=self.game.observation_space.n,
-                        activation='relu',kernel_initializer='he_uniform'))
-        self.model.add(Dense(256, activation='relu',
-                        kernel_initializer='he_uniform'))
-        self.model.add(Dense(256, activation='relu',
-                        kernel_initializer='he_uniform'))
-        self.model.add(Dense(256, activation='relu',
-                        kernel_initializer='he_uniform'))
-        self.model.add(Dense(256, activation='relu',
-                        kernel_initializer='he_uniform'))
-        self.model.add(Dense(256, activation='relu',
-                        kernel_initializer='he_uniform'))
-        self.model.add(Dense(256, activation='relu',
-                        kernel_initializer='he_uniform'))
-        self.model.add(Dense(256, activation='relu',
-                        kernel_initializer='he_uniform'))
-        self.model.add(Dense(1, activation='linear',
-                        kernel_initializer='he_uniform'))
-        self.model.compile(loss='mse', optimizer=Adam(lr=self.learning_rate))
+        self.model = mlp(self.game.space_1d.n,5,256,1,lr=self.learning_rate)
     def greedy_rollout_value_func(self,it):
         with open("greedy_rollout.log","a") as f:
             f.write(f"==========Iteration {it}==========\n")
@@ -118,7 +100,7 @@ class DeepTD0(Agent):
     def get_action(self,state):
         action_vals = []
         for a in range(self.game.action_space.n):
-            new_state,reward,done = self.game.check_update(state,a)
+            new_state,reward,done = self.game.check_update(self.state,a)
             if done:
                 action_vals.append(reward)
             else:
