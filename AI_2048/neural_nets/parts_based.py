@@ -16,12 +16,11 @@ class PartsLayer(Layer):
         self.bias_initializer = bias_initializer
 
     def build(self, input_shape):
-        self.parts = []
         self.part_length = input_shape[2]
-        for i in range(input_shape[1]):
-            self.parts.append(self.add_weight("part"+str(i),
-                              shape=[self.part_length,self.part_outputs],
-                              initializer=self.kernel_initializer))
+        self.parts = input_shape[1]
+        self.kernel = self.add_weight("kernel",
+                            shape=[self.part_length,self.part_outputs],
+                            initializer=self.kernel_initializer)
         if self.use_bias:
             self.bias = self.add_weight(shape=(input_shape[1],self.part_outputs),
                                         initializer=self.bias_initializer,
@@ -30,14 +29,11 @@ class PartsLayer(Layer):
             self.bias = None
         self.built = True
     def call(self, input):
-        begin = 0
         out_slices = []
-        for i in range(len(self.parts)):
-            part = self.parts[i]
+        for i in range(self.parts):
             put = input[:,i]
-            res = K.dot(put, part)
+            res = K.dot(put, self.kernel)
             out_slices.append(res)
-            begin+=self.part_length
         output = tf.stack(out_slices)
         output = tf.transpose(output,perm=[1,0,2])
         if self.use_bias:

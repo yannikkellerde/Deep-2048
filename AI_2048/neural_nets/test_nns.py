@@ -1,17 +1,28 @@
 from AI_2048.env.game import Game_2048
-from AI_2048.neural_nets.smart_nn import build_smart_nn
+from AI_2048.neural_nets.parts_based import build_smart_nn
 from AI_2048.neural_nets.mlp import mlp
 import random
 import numpy as np
 game = Game_2048()
+def xor(a, b):
+    return (a or b) and (not (a and b))
 def spit_out_test_data():
     input = game.convert_to_nn_input_2D(game.space_2d.sample())
     #input = np.array([[random.randint(0,1) for _ in range(16)] for _ in range(12)])
     output = np.zeros((len(input),))
     for i in range(len(input)):
         put = input[i]
-        if (sum(put[:4])>sum(put[4:8]) or sum(put[8:12])>sum(put[12:16])) and (not(sum(put[:4])>sum(put[4:8]) and sum(put[8:12])>sum(put[12:16]))):
+        if xor(sum(put[:4])>sum(put[4:8]),sum(put[2:6])>sum(put[6:10])):
             output[i]=1
+        if xor(sum(put[7:12])>sum(put[0:6]), put[2]):
+            output[i]=0
+        if xor(sum(put[8:12])>sum(put[3:7]),sum(put[1:3])>sum(put[9:11])):
+            output[i]=1
+    for i in range(len(output)):
+        if i==len(output)-1:
+            output[i]=xor(output[i],output[0])
+        else:
+            output[i]=xor(output[i],output[i+1])
     return input,output
 def get_batch(size):
     batch_in = []
@@ -24,14 +35,16 @@ def get_batch(size):
         targets.append(output)
     return np.array(batch_flat),np.array(batch_in,dtype=np.float32),np.array(targets)
 
-smart = build_smart_nn(16,1,0,0,game.space_2d.nvec[0],output_activation="sigmoid",lr=0.01)
-normal = mlp(game.space_1d.n,1,27,game.max_power,output_activation="sigmoid",lr=0.01)
-for i in range(100000):
+smart = build_smart_nn(20,1,2,27,game.space_2d.nvec[0],output_activation="sigmoid",lr=0.01)
+normal = mlp(game.space_1d.n,3,27,game.max_power,output_activation="sigmoid",lr=0.01)
+for i in range(1):
     batch_flat,batch_in,target = get_batch(256)
     smart_loss = smart.train_on_batch(batch_in, target)
     normal_loss = normal.train_on_batch(batch_flat,target)
     if i%10==0:
         print(f"Iteration {i}, smart_loss {smart_loss}, normal_loss {normal_loss}")
+print(smart.summary())
+print(normal.summary())
 """def spit_xor_batch(size):
     inputs=np.array([[random.randint(0,1) for _ in range(2)] for _ in range(size)])
     outputs = np.zeros(size)

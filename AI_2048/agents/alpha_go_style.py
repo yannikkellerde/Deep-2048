@@ -60,6 +60,24 @@ class MCTS_NN():
             else:
                 node = child
                 path.append(node)
-    def expand(self,node):
-        nn_input = self.game.convert_to_nn_input(node.state)
-        nn_output = self.model.predict()
+    def expand(self,path,move_props):
+        node = path[-1]
+        for a in range(self.game.action_space.n):
+            new_state,reward,done = self.game.check_update(node.state,a)
+            if not done:
+                child = player_Node(new_state,move_props[a],reward)
+                prob_states,probs = self.game.get_state_expectations(child.state)
+                for i in range(len(prob_states)):
+                    child_child = probabilistic_Node(prob_states[i],probs[i])
+                    child.children.append(child_child)
+        if len(node.children)==0:
+            node.done = True
+    def backtrack(self,node_path,value):
+        while len(node_path)>0:
+            node = node_path.pop()
+            node.visits+=1
+            if isinstance(node,player_Node):
+                value+=node.transition_reward
+                node.total_value += value
+                node.action_value = node.total_value/node.visits
+    
