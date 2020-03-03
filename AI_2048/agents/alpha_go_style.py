@@ -12,7 +12,7 @@ import math
 
 class Node():
     def __init__(self,state):
-        self.visit_count = 0
+        self.visits = 0
         self.state = state
         self.children = []
 class player_Node(Node):
@@ -36,8 +36,9 @@ class MCTS_NN():
         self.batch_size = 1024
         self.model = mlp(self.game.space_1d.n,5,256,self.game.action_space.n+1,lr=self.learning_rate)
         self.exploration_constant = 100
+        self.root = probabilistic_Node(self.game.state,1)
     def player_node_policy(self,node:Node,parent:Node):
-        return node.action_value+self.exploration_constant*node.prior*(math.sqrt(parent.visit_count)/(node.visit_count+1))
+        return node.action_value+self.exploration_constant*node.prior*(math.sqrt(parent.visits)/(node.visits+1))
     def prob_node_tree_policy(self,node:probabilistic_Node,parent:Node):
         return node.probability-node.visits/parent.visits
     def choose_child(self,node:Node):
@@ -72,12 +73,17 @@ class MCTS_NN():
                     child.children.append(child_child)
         if len(node.children)==0:
             node.done = True
-    def backtrack(self,node_path,value):
+    def backtrack(self,node_path,value,compensate_virtual_loss):
         while len(node_path)>0:
             node = node_path.pop()
-            node.visits+=1
+            node.visits+=1-compensate_virtual_loss
             if isinstance(node,player_Node):
                 value+=node.transition_reward
                 node.total_value += value
                 node.action_value = node.total_value/node.visits
-    
+    def virtual_loss(self,node_path):
+        for node in node_path:
+            node.visits+=1
+    def selection_worker(self,queue):
+        while 1:
+            state = self.root

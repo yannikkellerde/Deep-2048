@@ -23,7 +23,7 @@ class probabilistic_Node(Node):
 class MCTS(Agent):
     def __init__(self,game=Game_2048(),playout_policy=get_policy_func("Random_agent")):
         self.game = game
-        self.exploration_constant = 100
+        self.exploration_constant = 200
         self.playout_policy = playout_policy
         self.root = probabilistic_Node(self.game.state,1)
     def set_state(self, state):
@@ -131,15 +131,15 @@ class MCTS(Agent):
         return sorted(action_vals,key=lambda x:x["visits"])[-1]["action"]
 
 if __name__ == "__main__":
-    game = Game_2048()
-    for ec in [10,40,70,100,175,250,500]:
+    for ec in [40,70,100,175,250,375,500,700]*10:
+        game = Game_2048()
         mcts = MCTS(game,playout_policy=get_policy_func("Random_agent"))
         mcts.exploration_constant = ec
         print(game)
         cum_reward = 0
         while 1:
             mcts.set_state(game.state)
-            action = mcts.get_action(game.state,1)
+            action = mcts.get_action(game.state,0.2)
             if action is None:
                 break
             _,reward,done = game.step(action)
