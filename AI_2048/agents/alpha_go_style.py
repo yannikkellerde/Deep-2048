@@ -9,6 +9,7 @@ import random
 import time
 from collections import deque
 import math
+from multiprocessing import Queue
 
 class Node():
     def __init__(self,state):
@@ -61,8 +62,7 @@ class MCTS_NN():
             else:
                 node = child
                 path.append(node)
-    def expand(self,path,move_props):
-        node = path[-1]
+    def expand(self,node,move_props):
         for a in range(self.game.action_space.n):
             new_state,reward,done = self.game.check_update(node.state,a)
             if not done:
@@ -84,6 +84,74 @@ class MCTS_NN():
     def virtual_loss(self,node_path):
         for node in node_path:
             node.visits+=1
-    def selection_worker(self,queue):
-        while 1:
-            state = self.root
+    def nn_evaluation_worker(self,input_queues,output_queues):
+        while True:
+            tasks = []
+            return_queues = []
+            for i,q in enumerate(input_queues):
+                while not q.empty():
+                    task, indicator = q.get()
+                    tasks.append()
+                    return_queues.append([i,indicator])
+            prediction = self.model.predict(np.array(tasks))
+            for i,return_stuff in enumerate(return_queues):
+                q_num,indicator = return_stuff
+                output_queues[q_num].put([prediction[i],indicator])
+    def get_move_props(self):
+        move_props = np.zeros(4)
+        for a in range(self.game.action_space.n):
+            state,reward,done=self.game.check_update(self.root.state,a)
+            for child in self.root.children:
+                if np.array_equal(child.state,state):
+                    move_props[a]=child.visits/self.root.visits
+                    break
+        return move_props
+    def monte_carlo_worker(self,nn_input_queue:Queue,nn_output_queue:Queue,training_examples_queue:Queue,move_time,game_count):
+        path_store_num = 0
+        max_path_store_num = 10000
+        store_paths = {}
+        for _ in range(game_count):
+            self.game.reset()
+            self.root = probabilistic_Node(self.game.state,1)
+            done = False
+            rewardlist = []
+            incomplete_training_examples = []
+            recent_expands = deque(maxlen=10)
+            next_move_time = time.time()+move_time
+            no_more_new = False
+            while not done:
+                if not no_more_new:
+                    path = self.select_most_promising()
+                    node = path[-1]
+                    if not node in recent_expands:
+                        recent_expands.append(node)
+                        nn_input = self.game.convert_to_nn_input(node.state)
+                        store_paths[path_store_num]=path
+                        nn_output_queue.put([nn_input,path_store_num])
+                        path_store_num=path_store_num+1 if path_store_num<max_path_store_num else 0
+                        self.virtual_loss(path)
+                while not nn_input_queue.empty():
+                    nn_res,path_num = nn_input_queue.get()
+                    back_path = store_paths[path_num]
+                    node = back_path[-1]
+                    del store_paths[path_num]
+                    value = nn_res[0]
+                    move_props = nn_res[1:]
+                    self.expand(node,move_props)
+                    self.backtrack(back_path,value,True)
+                if time.time()>next_move_time:
+                    no_more_new = True
+                if no_more_new and len(store_paths)==0:
+                    move_props=self.get_move_props()
+                    nn_state = self.game.convert_to_nn_input(self.root.state)
+                    action = np.argmax(move_props)
+                    _,reward,done = self.game.step(action)
+                    incomplete_training_examples.append([nn_state,move_props])
+                    rewardlist.append(reward)
+                    self.root = probabilistic_Node(self.game.state,1)
+                    next_move_time = time.time()+move_time
+            rew_sum = 0
+            for i in range(len(incomplete_training_examples)-1,-1,-1):
+                training_example = incomplete_training_examples[i]
+                rew_sum += rewardlist[i]
+                training_example.append(rew_sum)
