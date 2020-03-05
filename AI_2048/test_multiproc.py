@@ -14,15 +14,15 @@ def putter(q:Queue):
         q.put(stupid)
         time.sleep(0.1)
         stupids.append(stupid)
-    q.put("Done")
+    q.close()
     for stupid in stupids:
         print(stupid)
 def getter(q:Queue):
     while 1:
         try:
-            f = q.get(block=False)
+            f = q.get(block=True)
         except Exception as e:
-            print("Empty")
+            print(e)
             continue
         print(f)
         if f == "Done":

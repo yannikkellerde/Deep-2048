@@ -35,6 +35,7 @@ class MCTS_NN():
         self.memory = deque(maxlen=100000)
         self.learning_rate = 0.01
         self.batch_size = 1024
+        # First model output is the value, the rest are the move probabilities
         self.model = mlp(self.game.space_1d.n,5,256,self.game.action_space.n+1,lr=self.learning_rate)
         self.exploration_constant = 100
         self.root = probabilistic_Node(self.game.state,1)
@@ -85,14 +86,23 @@ class MCTS_NN():
         for node in node_path:
             node.visits+=1
     def nn_evaluation_worker(self,input_queues,output_queues):
-        while True:
+        while len(input_queues)>0:
             tasks = []
             return_queues = []
-            for i,q in enumerate(input_queues):
+            i=0
+            while i<len(input_queues):
+                q = input_queues[i]
                 while not q.empty():
-                    task, indicator = q.get()
+                    queue_val = q.get()
+                    if queue_val is None:
+                        del input_queues[i]
+                        del output_queues[i]
+                        i-=1
+                        break
+                    task, indicator = queue_val
                     tasks.append()
                     return_queues.append([i,indicator])
+                i+=1
             prediction = self.model.predict(np.array(tasks))
             for i,return_stuff in enumerate(return_queues):
                 q_num,indicator = return_stuff
@@ -155,3 +165,6 @@ class MCTS_NN():
                 training_example = incomplete_training_examples[i]
                 rew_sum += rewardlist[i]
                 training_example.append(rew_sum)
+            training_examples_queue.put(incomplete_training_examples)
+        nn_output_queue.put(None)
+    def do_training(self,iterations):
