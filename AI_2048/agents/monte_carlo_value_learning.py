@@ -134,8 +134,8 @@ class MC_state_value():
         update_in = np.array([self.game.convert_to_nn_input(x[1]) for x in new_samples])
         target = np.array([x[0] for x in new_samples])
         predicted = self.model.predict(update_in).reshape(len(target))
-        abs_error = sum([abs(target[i]-predicted[i]) for i in range(len(target))])/len(target)
-        mse_error = sum([(target[i]-predicted[i])**2 for i in range(len(target))])/len(target)
+        abs_error = sum(abs(target[i]-predicted[i]) for i in range(len(target)))/len(target)
+        mse_error = sum((target[i]-predicted[i])**2 for i in range(len(target)))/len(target)
         return abs_error,mse_error
     def compare_to_monte_carlo_mean(self,rollouts,samples):
         deviation_tot = 0
@@ -160,9 +160,9 @@ class MC_state_value():
                 cum_rews.append(cum_rew)
             mean = sum(cum_rews)/len(cum_rews)
             prediction = self.model.predict(self.game.convert_to_nn_input(state).reshape(1,-1)).item()
-            sudo_test_error = sum([(prediction-cum_rews[i])**2 for i in range(len(cum_rews))])/len(cum_rews)
+            sudo_test_error = sum((prediction-cum_rews[i])**2 for i in range(len(cum_rews)))/len(cum_rews)
             sudo_test_errors.append(sudo_test_error)
-            std = math.sqrt((1/len(cum_rews))*sum([(x-mean)**2 for x in cum_rews]))
+            std = math.sqrt((1/len(cum_rews))*sum((x-mean)**2 for x in cum_rews))
             deviation_tot+=abs(mean-prediction)
             print(f"Monte carlo mean: {mean}, prediction: {prediction}, sample val: {sample[0]}, sudo test error: {sudo_test_error}, std:{std}")
         print(f"Average deviation: {deviation_tot/len(samples)}, sudo test error avg: {sum(sudo_test_errors)/len(sudo_test_errors)}")

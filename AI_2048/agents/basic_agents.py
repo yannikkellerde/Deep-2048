@@ -93,7 +93,7 @@ def calc_rollout_variances(agent,rollouts,step_size):
                 cum_rew+=reward
             cum_rews.append(cum_rew)
         mean = sum(cum_rews)/len(cum_rews)
-        std = math.sqrt((1/len(cum_rews))*sum([(x-mean)**2 for x in cum_rews]))
+        std = math.sqrt((1/len(cum_rews))*sum((x-mean)**2 for x in cum_rews))
         print(f"State number: {i}, Mean reward: {mean}, STD: {std}")
 if __name__=="__main__":
     game = Game_2048()
