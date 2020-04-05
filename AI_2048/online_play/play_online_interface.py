@@ -1,6 +1,7 @@
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from AI_2048.agents.base import Agent
+from AI_2048.agents.mcts import MCTS
 import math
 import numpy as np
 import time
@@ -23,7 +24,7 @@ class Web_interface():
                 self.board[(int(possplit[3])-1)*4+int(possplit[2])-1]=int(math.log(int(numbersplit[1]),2))
     def step(self):
         self.agent.set_state(self.board)
-        action=self.agent.get_action()
+        action=self.agent.get_action(self.agent.game.state,0.1)
         if action==RIGHT:
             self.body.send_keys(Keys.ARROW_RIGHT)
         if action==BOTTOM:
@@ -37,3 +38,7 @@ class Web_interface():
             self.get_board()
             self.step()
             time.sleep(0.2)
+if __name__ == "__main__":
+    agent=MCTS()
+    web = Web_interface(agent)
+    web.run()
