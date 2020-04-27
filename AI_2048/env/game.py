@@ -12,6 +12,7 @@ class Game_2048(gym.Env):
         self.reset()
     def reset(self):
         self.state=np.zeros(16,dtype=np.int)
+        self.done = False
         self.spawn_number()
         self.spawn_number()
         return self.state
@@ -76,11 +77,11 @@ class Game_2048(gym.Env):
         done = np.array_equal(new_state,state)
         return new_state,self.done_reward if done else reward,done
     def step(self,action):
-        state,reward,done=self.check_update(self.state,action)
+        state,reward,self.done=self.check_update(self.state,action)
         self.state = state
-        if not done:
+        if not self.done:
             self.spawn_number()
-        return state,reward,done
+        return state,reward,self.done
     def random_step(self):
         aval_actions = list(range(self.action_space.n))
         while len(aval_actions)>0:
