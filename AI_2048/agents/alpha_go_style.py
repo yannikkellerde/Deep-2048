@@ -14,6 +14,7 @@ from multiprocessing import Queue,Process,Pool
 from AI_2048.util.generators import RL_sequence
 from tensorflow.keras import Model
 from tensorflow.keras.callbacks import CSVLogger
+from tensorflow.keras
 from functools import reduce
 
 class Node():
@@ -243,8 +244,12 @@ class MCTS_NN():
         move_time = 1
         games_per_monte_carlo = 100
         training_iterations = 2000
-        p = Pool(mc_workers)
+        pool = Pool(mc_workers)
         nn_input_queues = [Queue() for _ in range(mc_workers)]
         nn_output_queues = [Queue() for _ in range(mc_workers)]
+        eval_thread = Process(target=nn_evaluation_worker, args=(nn_input_queues,nn_output_queues))
         args = zip(nn_input_queues,nn_output_queues,[move_time]*mc_workers,[games_per_monte_carlo]*mc_workers)
-
+        for i in range(training_iterations):
+            eval_thread.start()
+            pool.starmap(args)
+            
