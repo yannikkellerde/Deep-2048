@@ -14,7 +14,7 @@ from multiprocessing import Queue,Process,Pool
 from AI_2048.util.generators import RL_sequence
 from tensorflow.keras import Model
 from tensorflow.keras.callbacks import CSVLogger
-from tensorflow.keras
+import tensorflow.keras as keras
 from functools import reduce
 
 class Node():
@@ -43,10 +43,11 @@ class MCTS_NN():
         self.batch_size = 1024
         # First model output is the value, the rest are the move probabilities
         self.model = mlp(self.game.space_1d.n,5,256,self.game.action_space.n+1,lr=self.learning_rate)
+        self.experimental_model = keras.models.clone_model(self.model)
         self.exploration_constant = 100
         self.root = probabilistic_Node(self.game.state,1)
         self.generator = RL_sequence(self.memory,self.batch_size)
-        self.current_avg = 0
+        self.best_net_avg_score = 0
         try:
             rmtree(os.path.abspath(os.path.dirname(__file__)) + "/logdir")
         except:
@@ -182,24 +183,8 @@ class MCTS_NN():
             all_training_examples.extend(incomplete_training_examples)
         nn_output_queue.put(None)
         return all_training_examples
-    def train_one_batch(self,model):
-        mini_batch = np.array(random.sample(samples, self.batch_size))
-        update_in = np.array([x[0] for x in mini_batch])
-        target = np.array([x[1] for x in mini_batch])
-        loss = model.train_on_batch(update_in, target)
-        return loss
     def do_training(self,model:Model,steps_per_epoch:int,epochs:int,validation_data):
         model.fit_generator(self.generator,validation_data=validation_data,steps_per_epoch=steps_per_epoch,epochs=epochs)
-
-        loss_avg = 0
-        log_val = 100
-        for i in range(iterations):
-            loss = self.train_one_batch(samples)
-            loss_avg+=loss
-            if i%log_val==log_val-1:
-                print(f"Iteration: {i}, train error: {loss_avg/log_val:.3f}")
-                with self.train_writer.as_default():
-                    tf.summary.scalar('train loss', loss_avg/log_val, step=i)
     def evaluate_net(self,new_net,game_batch_len,time_per_move,batch_num=1):
         score_sum = 0
         for i in range(batch_num):
@@ -244,12 +229,24 @@ class MCTS_NN():
         move_time = 1
         games_per_monte_carlo = 100
         training_iterations = 2000
+        validation_set_size = 1024
+        train_epochs = 100
         pool = Pool(mc_workers)
         nn_input_queues = [Queue() for _ in range(mc_workers)]
         nn_output_queues = [Queue() for _ in range(mc_workers)]
-        eval_thread = Process(target=nn_evaluation_worker, args=(nn_input_queues,nn_output_queues))
+        eval_thread = Process(target=self.nn_evaluation_worker, args=(nn_input_queues,nn_output_queues))
         args = zip(nn_input_queues,nn_output_queues,[move_time]*mc_workers,[games_per_monte_carlo]*mc_workers)
         for i in range(training_iterations):
             eval_thread.start()
-            pool.starmap(args)
-            
+            pool.starmap(self.monte_carlo_worker,args)
+            eval_thread.join()
+            validation_set = self.generator.extract_validation_set(validation_set_size)
+            self.experimental_model.set_weights(self.model.get_weights())
+            self.do_training(self.experimental_model,len(self.generator),train_epochs,validation_set)
+            exp_score = self.evaluate_net(self.experimental_model,game_batch_len=256,time_per_move=1,batch_num=1)
+            if exp_score > self.best_net_avg_score:
+                self.model.set_weights(self.experimental_model.get_weights())
+                print(f"New best model {exp_score}>{self.best_net_avg_score}")
+                self.best_net_avg_score = exp_score
+            else:
+                print(f"Model did not improve {exp_score}<{self.best_net_avg_score}")

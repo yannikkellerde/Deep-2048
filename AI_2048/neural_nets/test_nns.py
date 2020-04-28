@@ -35,15 +35,19 @@ def get_batch(size):
         targets.append(output)
     return np.array(batch_flat),np.array(batch_in,dtype=np.float32),np.array(targets)
 
-smart = build_smart_nn(20,1,2,27,game.space_2d.nvec[0],output_activation="sigmoid",lr=0.01)
+#smart = build_smart_nn(20,1,2,27,game.space_2d.nvec[0],output_activation="sigmoid",lr=0.01)
 normal = mlp(game.space_1d.n,3,27,game.max_power,output_activation="sigmoid",lr=0.01)
-for i in range(1):
-    batch_flat,batch_in,target = get_batch(256)
-    smart_loss = smart.train_on_batch(batch_in, target)
+for i in range(10):
+    batch_flat,batch_in,target = get_batch(128)
+    #smart_loss = smart.train_on_batch(batch_in, target)
     normal_loss = normal.train_on_batch(batch_flat,target)
-    if i%10==0:
-        print(f"Iteration {i}, smart_loss {smart_loss}, normal_loss {normal_loss}")
-print(smart.summary())
+    if i%1==0:
+        print(f"Iteration {i}, normal_loss {normal_loss}")
+for i in range(10):
+    batch_flat,batch_in,target = get_batch((i+1)*8)
+    pred = normal.predict(batch_flat)
+    print(pred)
+#print(smart.summary())
 print(normal.summary())
 """def spit_xor_batch(size):
     inputs=np.array([[random.randint(0,1) for _ in range(2)] for _ in range(size)])

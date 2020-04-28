@@ -1,4 +1,5 @@
 from collections import deque
+from random import shuffle
 class RL_sequence():
     def __init__(self, memory:deque, batch_size:int):
         self.memory = memory
@@ -10,3 +11,8 @@ class RL_sequence():
         update_in = np.array([x[0] for x in mini_batch])
         target = np.array([x[1] for x in mini_batch])
         return update_in, target
+    def extract_validation_set(self,size):
+        # Not runtime efficient
+        shuffle(self.memory)
+        v_set = [self.memory.pop() for _ in range(size)]
+        return v_set
