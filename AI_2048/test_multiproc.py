@@ -8,6 +8,7 @@ class stupid_class():
         return f"stupid {self.i}"
 
 def putter(q:Queue):
+    print(q)
     stupids = []
     for i in range(20):
         stupid = stupid_class(i)
@@ -17,10 +18,11 @@ def putter(q:Queue):
     q.close()
     for stupid in stupids:
         print(stupid)
-def getter(q:Queue):
+def getter(q):
+    print(q)
     while 1:
         try:
-            f = q.get(block=True)
+            f = q[0].get(block=True)
         except Exception as e:
             print(e)
             continue
@@ -33,7 +35,7 @@ q = Queue()
 put_proc = Process(
     target=putter, args=[q])
 get_proc = Process(
-    target=getter, args=[q])
+    target=getter, args=[[q]])
 put_proc.start()
 get_proc.start()
 put_proc.join()

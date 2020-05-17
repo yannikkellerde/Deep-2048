@@ -10,12 +10,23 @@ from shutil import rmtree
 import time
 from collections import deque
 import math
-from multiprocessing import Queue,Process,Pool
+from multiprocessing import Queue,Process,Pool,Manager
 from AI_2048.util.generators import RL_sequence
 from tensorflow.keras import Model
 from tensorflow.keras.callbacks import CSVLogger
 import tensorflow.keras as keras
 from functools import reduce
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler("debug.log"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger()
 
 class Node():
     def __init__(self,state):
@@ -36,27 +47,105 @@ class probabilistic_Node(Node):
         self.done = False
 
 class MCTS_NN():
-    def __init__(self,game=Game_2048()):
+    def __init__(self,game=Game_2048(), batch_size=1024, lr=0.01):
         self.game = game
         self.memory = deque(maxlen=100000)
-        self.learning_rate = 0.01
-        self.batch_size = 1024
-        # First model output is the value, the rest are the move probabilities
+        self.learning_rate = lr
+        self.batch_size = batch_size
         self.model = mlp(self.game.space_1d.n,5,256,self.game.action_space.n+1,lr=self.learning_rate)
-        self.experimental_model = keras.models.clone_model(self.model)
-        self.exploration_constant = 100
-        self.root = probabilistic_Node(self.game.state,1)
+        self.experimental_model = mlp(self.game.space_1d.n,5,256,self.game.action_space.n+1,lr=self.learning_rate)
+        rmtree(os.path.abspath(os.path.dirname(__file__)) + "/tensorboard_logs",ignore_errors=True)
+        self.tensorboard_callback = keras.callbacks.TensorBoard(log_dir="./tensorboard_logs")
         self.generator = RL_sequence(self.memory,self.batch_size)
         self.best_net_avg_score = 0
-        try:
-            rmtree(os.path.abspath(os.path.dirname(__file__)) + "/logdir")
-        except:
-            pass
-        self.train_writer = tf.summary.create_file_writer(os.path.abspath(os.path.dirname(__file__)) + "/logdir")
-    def player_node_policy(self,node:Node,parent:Node):
-        return node.action_value+self.exploration_constant*node.prior*(math.sqrt(parent.visits)/(node.visits+1))
+        self.workers = MCTS_workers(game)
+
+    def save_model(self,model):
+        folder = "model_save"
+        os.makedirs(folder,exist_ok=True)
+        model_json = model.to_json()
+        with open(os.path.join(folder,"model.json"), "w") as json_file:
+            json_file.write(model_json)
+        # serialize weights to HDF5
+        model.save_weights(os.path.join(folder,"model.hf5"))
+        print("Saved model to disk")
+
+    def nn_evaluation_worker(self,input_queues,output_queues):
+        print("EVALUATION WORKER READY, process id:",os.getpid(),input_queues)
+        while len(input_queues)>0:
+            tasks = []
+            return_queues = []
+            i=0
+            while i<len(input_queues):
+                q = input_queues[i]
+                while not q.empty():
+                    queue_val = q.get()
+                    if queue_val is None:
+                        del input_queues[i]
+                        del output_queues[i]
+                        i-=1
+                        break
+                    task, indicator = queue_val
+                    tasks.append(task)
+                    return_queues.append([i,indicator])
+                i+=1
+            if len(tasks)==0:
+                continue
+            before = time.time()
+            prediction = self.model.predict(np.array(tasks))
+            print(f"Evaluated {len(tasks)} tasks in {time.time()-before} seconds. Workers left: {len(input_queues)}")
+            for i,return_stuff in enumerate(return_queues):
+                q_num,indicator = return_stuff
+                output_queues[q_num].put([prediction[i],indicator])
+        print("Ending evaluation worker")
+    def do_training(self,model:Model,steps_per_epoch:int,epochs:int,validation_data):
+        model.fit_generator(self.generator,validation_data=validation_data,steps_per_epoch=steps_per_epoch,epochs=epochs,callbacks=[self.tensorboard_callback])
+    def learn(self):
+        mc_workers = 5
+        move_time = 0.1
+        games_per_monte_carlo = 1
+        training_iterations = 2000
+        validation_set_size = 32
+        self.batch_size = 32
+        train_epochs = 100
+        nn_input_queues = [Queue() for _ in range(mc_workers)]
+        nn_output_queues = [Queue() for _ in range(mc_workers)]
+        training_examples_queue = Queue()
+        args = list(zip(nn_input_queues,nn_output_queues,[training_examples_queue]*mc_workers,[move_time]*mc_workers,[games_per_monte_carlo]*mc_workers))
+        for i in range(training_iterations):
+            logger.info(f"Starting monte carlo rollouts for iteration {i}")
+            self.workers.my_own_pool(mc_workers,self.workers.monte_carlo_worker,args)
+            self.nn_evaluation_worker(nn_input_queues,nn_output_queues)
+            while not training_examples_queue.empty():
+                self.memory.append(training_examples_queue.get())
+            for queue in nn_input_queues+nn_output_queues+[training_examples_queue]:
+                queue.close()
+                queue.join_thread()
+            validation_set = self.generator.extract_validation_set(validation_set_size)
+            self.experimental_model.set_weights(self.model.get_weights())
+            logger.info(f"Starting training for iteration {i}")
+            self.do_training(self.experimental_model,len(self.generator),train_epochs,validation_set)
+            logger.info(f"Evaluating new model")
+            exp_score = self.workers.evaluate_net(self.experimental_model,game_batch_len=256,time_per_move=1,batch_num=1)
+            if exp_score > self.best_net_avg_score:
+                self.model.set_weights(self.experimental_model.get_weights())
+                self.save_model(self.model)
+                print(f"New best model {exp_score}>{self.best_net_avg_score}")
+                self.best_net_avg_score = exp_score
+            else:
+                print(f"Model did not improve {exp_score}<{self.best_net_avg_score}")
+
+class MCTS_workers():
+    def __init__(self,game):
+        self.game = game
+        # First model output is the value, the rest are the move probabilities
+        self.exploration_constant = 100
+        self.root = probabilistic_Node(self.game.state,1)
+
+    def player_node_policy(self,node:player_Node,parent:Node):
+        return node.action_value+self.exploration_constant*node.prior_value*(math.sqrt(parent.visits)/(node.visits+1))
     def prob_node_tree_policy(self,node:probabilistic_Node,parent:Node):
-        return node.probability-node.visits/parent.visits
+        return node.probability-(node.visits/parent.visits if parent.visits>0 else 0)
     def choose_child(self,node:Node):
         max_val = -np.inf
         best_child = None
@@ -86,6 +175,7 @@ class MCTS_NN():
                 for i in range(len(prob_states)):
                     child_child = probabilistic_Node(prob_states[i],probs[i])
                     child.children.append(child_child)
+                node.children.append(child)
         if len(node.children)==0:
             node.done = True
     def backtrack(self,node_path,value,compensate_virtual_loss):
@@ -99,42 +189,28 @@ class MCTS_NN():
     def virtual_loss(self,node_path):
         for node in node_path:
             node.visits+=1
-    def nn_evaluation_worker(self,input_queues,output_queues):
-        while len(input_queues)>0:
-            tasks = []
-            return_queues = []
-            i=0
-            while i<len(input_queues):
-                q = input_queues[i]
-                while not q.empty():
-                    queue_val = q.get()
-                    if queue_val is None:
-                        del input_queues[i]
-                        del output_queues[i]
-                        i-=1
-                        break
-                    task, indicator = queue_val
-                    tasks.append()
-                    return_queues.append([i,indicator])
-                i+=1
-            prediction = self.model.predict(np.array(tasks))
-            for i,return_stuff in enumerate(return_queues):
-                q_num,indicator = return_stuff
-                output_queues[q_num].put([prediction[i],indicator])
     def get_move_props(self, root):
         move_props = np.zeros(4)
         for a in range(self.game.action_space.n):
-            state,reward,done=self.game.check_update(root.state,a)
+            state,_reward,_done=self.game.check_update(root.state,a)
             for child in root.children:
                 if np.array_equal(child.state,state):
                     move_props[a]=child.visits/root.visits
                     break
         return move_props
-    def monte_carlo_worker(self,nn_input_queue:Queue,nn_output_queue:Queue,move_time,game_count):
+    def my_own_pool(self,num_processes,target,args):
+        processes = []
+        for i in range(num_processes):
+            p = Process(target=target, args=args[i])
+            processes.append(p)
+            p.start()
+            processes.append(p)
+        return processes
+    def monte_carlo_worker(self,nn_input_queue:Queue,nn_output_queue:Queue,examples_queue:Queue,move_time,game_count):
+        print('READY: process id:', os.getpid())
         path_store_num = 0
         max_path_store_num = 10000
         store_paths = {}
-        all_training_examples = []
         for _ in range(game_count):
             self.game.reset()
             self.root = probabilistic_Node(self.game.state,1)
@@ -152,11 +228,11 @@ class MCTS_NN():
                         recent_expands.append(node)
                         nn_input = self.game.convert_to_nn_input(node.state)
                         store_paths[path_store_num]=path
-                        nn_output_queue.put([nn_input,path_store_num])
+                        nn_input_queue.put([nn_input,path_store_num])
                         path_store_num=path_store_num+1 if path_store_num<max_path_store_num else 0
                         self.virtual_loss(path)
-                while not nn_input_queue.empty():
-                    nn_res,path_num = nn_input_queue.get()
+                while not nn_output_queue.empty():
+                    nn_res,path_num = nn_output_queue.get()
                     back_path = store_paths[path_num]
                     node = back_path[-1]
                     del store_paths[path_num]
@@ -175,16 +251,15 @@ class MCTS_NN():
                     rewardlist.append(reward)
                     self.root = probabilistic_Node(self.game.state,1)
                     next_move_time = time.time()+move_time
+                    no_more_new = False
             rew_sum = 0
             for i in range(len(incomplete_training_examples)-1,-1,-1):
                 training_example = incomplete_training_examples[i]
                 rew_sum += rewardlist[i]
                 training_example[1]=[rew_sum]+training_example[1]
-            all_training_examples.extend(incomplete_training_examples)
-        nn_output_queue.put(None)
-        return all_training_examples
-    def do_training(self,model:Model,steps_per_epoch:int,epochs:int,validation_data):
-        model.fit_generator(self.generator,validation_data=validation_data,steps_per_epoch=steps_per_epoch,epochs=epochs)
+            for training_example in incomplete_training_examples:
+                examples_queue.put(training_example)
+        nn_input_queue.put(None)
     def evaluate_net(self,new_net,game_batch_len,time_per_move,batch_num=1):
         score_sum = 0
         for i in range(batch_num):
@@ -219,34 +294,11 @@ class MCTS_NN():
                         continue
                     move_props=self.get_move_props(roots[i])
                     action = np.argmax(move_props)
-                    _,reward,done = game.step(action)
+                    _,reward,_done = game.step(action)
                     scores[i]+=reward
             score_sum+=sum(scores)/len(scores)
         return score_sum/batch_num
 
-    def learn(self):
-        mc_workers = 5
-        move_time = 1
-        games_per_monte_carlo = 100
-        training_iterations = 2000
-        validation_set_size = 1024
-        train_epochs = 100
-        pool = Pool(mc_workers)
-        nn_input_queues = [Queue() for _ in range(mc_workers)]
-        nn_output_queues = [Queue() for _ in range(mc_workers)]
-        eval_thread = Process(target=self.nn_evaluation_worker, args=(nn_input_queues,nn_output_queues))
-        args = zip(nn_input_queues,nn_output_queues,[move_time]*mc_workers,[games_per_monte_carlo]*mc_workers)
-        for i in range(training_iterations):
-            eval_thread.start()
-            pool.starmap(self.monte_carlo_worker,args)
-            eval_thread.join()
-            validation_set = self.generator.extract_validation_set(validation_set_size)
-            self.experimental_model.set_weights(self.model.get_weights())
-            self.do_training(self.experimental_model,len(self.generator),train_epochs,validation_set)
-            exp_score = self.evaluate_net(self.experimental_model,game_batch_len=256,time_per_move=1,batch_num=1)
-            if exp_score > self.best_net_avg_score:
-                self.model.set_weights(self.experimental_model.get_weights())
-                print(f"New best model {exp_score}>{self.best_net_avg_score}")
-                self.best_net_avg_score = exp_score
-            else:
-                print(f"Model did not improve {exp_score}<{self.best_net_avg_score}")
+if __name__ == "__main__":
+    agent = MCTS_NN()
+    agent.learn()
